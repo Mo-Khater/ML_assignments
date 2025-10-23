@@ -21,7 +21,7 @@ class ParkingProblem(Problem[ParkingState, ParkingAction]):
     # This function should return the initial state
     def get_initial_state(self) -> ParkingState:
         #TODO: ADD YOUR CODE HERE
-        return self.cars
+        return self.cars # The initial state is the tuple of car positions
         # NotImplemented()
     
     # This function should return True if the given state is a goal. Otherwise, it should return False.
@@ -33,19 +33,19 @@ class ParkingProblem(Problem[ParkingState, ParkingAction]):
         return True 
         # NotImplemented()
     def move(self,car,index,direction,available_actions,state):
-        new_pos = Point(car.x + direction.to_vector().x,car.y + direction.to_vector().y)
-        if new_pos in self.passages and new_pos not in state:
-            available_actions.append((index, direction))
+        new_pos = Point(car.x + direction.to_vector().x,car.y + direction.to_vector().y) # calculate the new position after moving in the given direction
+        if new_pos in self.passages and new_pos not in state: # if the new position is a passage and there is no car in it
+            available_actions.append((index, direction)) # add the action to the available actions
 
     # This function returns a list of all the possible actions that can be applied to the given state
     def get_actions(self, state: ParkingState) -> List[ParkingAction]:
         #TODO: ADD YOUR CODE HERE
-        available_actions : List[ParkingAction] = []
+        available_actions : List[ParkingAction] = [] # list to store the available actions
         for index,car_position in enumerate(state): # for each car try to move it in any four directions
-            self.move(car_position,index,Direction.RIGHT,available_actions,state)
-            self.move(car_position,index,Direction.LEFT,available_actions,state)
-            self.move(car_position,index,Direction.UP,available_actions,state)
-            self.move(car_position,index,Direction.DOWN,available_actions,state)
+            self.move(car_position,index,Direction.RIGHT,available_actions,state) # try to move right
+            self.move(car_position,index,Direction.LEFT,available_actions,state) # try to move left
+            self.move(car_position,index,Direction.UP,available_actions,state) # try to move up
+            self.move(car_position,index,Direction.DOWN,available_actions,state) # try to move down
 
         return available_actions
 
@@ -54,13 +54,13 @@ class ParkingProblem(Problem[ParkingState, ParkingAction]):
     # This function returns a new state which is the result of applying the given action to the given state
     def get_successor(self, state: ParkingState, action: ParkingAction) -> ParkingState:
 
-        car_index, direction = action        
-        car_position = state[car_index]
-        move_vector = direction.to_vector()
-        new_position = Point(car_position.x + move_vector.x, car_position.y + move_vector.y)
-        new_cars = list(state)
-        new_cars[car_index] = new_position
-        new_cars = tuple(new_cars)
+        car_index, direction = action  # unpack the action
+        car_position = state[car_index] # get the position of the car to be moved
+        move_vector = direction.to_vector() # get the movement vector for the given direction
+        new_position = Point(car_position.x + move_vector.x, car_position.y + move_vector.y) # calculate the new position of the car after moving
+        new_cars = list(state) # convert the tuple to a list to be able to modify it
+        new_cars[car_index] = new_position # update the position of the moved car
+        new_cars = tuple(new_cars) # convert back to tuple
 
         return new_cars
 
@@ -69,7 +69,7 @@ class ParkingProblem(Problem[ParkingState, ParkingAction]):
     # This function returns the cost of applying the given action to the given state
     def get_cost(self, state: ParkingState, action: ParkingAction) -> float:
         #TODO: ADD YOUR CODE HERE
-        return 26 - action[0]
+        return 26 - action[0] # The cost is 26 - index of the car being moved (A=>26, B=>25, ..., Z=>1)
     
      # Read a parking problem from text containing a grid of tiles
     @staticmethod
