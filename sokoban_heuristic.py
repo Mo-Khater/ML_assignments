@@ -17,4 +17,5 @@ def strong_heuristic(problem: SokobanProblem, state: SokobanState) -> float:
     # which is the number of get_actions calls during the search
     #NOTE: you can use problem.cache() to get a dictionary in which you can store information that will persist between calls of this function
     # This could be useful if you want to store the results heavy computations that can be cached and used across multiple calls of this function
-    NotImplemented()
+    return min(manhattan_distance(state.player, crate) for crate in state.crates) - 1
+    # NotImplemented()

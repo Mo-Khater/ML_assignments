@@ -15,21 +15,21 @@ import itertools
 # 1. A list of actions which represent the path from the initial state to the final state
 # 2. None if there is no solution
 
-def get_solution(parent_map,state):
-    solution = [state] # the solution is a list of states including all states execpt the initial one 
+def get_solution(parent_map, action_map, state):
+    actions = []  # the solution is a list of states including all states execpt the initial one 
     while(parent_map[state]): # while the state has a parent
+        actions.append(action_map[state])
         state = parent_map[state] 
-        solution.append(state)
 
-    solution.pop()
-    solution.reverse() # reverse the solution to be from initial to goal
-    return solution
+    actions.reverse() # reverse the solution to be from initial to goal
+    return actions
 
 def BreadthFirstSearch(problem: Problem[S, A], initial_state: S) -> Solution:
     #TODO: ADD YOUR CODE HERE
     frontier = deque() # use queue for BFS
     explored = set() # use explore to use graph search
     parent_map = {initial_state:None} # used to store the parents
+    action_map = {initial_state: None}  # used to store actions
     frontier.append(initial_state)
     while frontier: # as the frontier isn't empty
         state = frontier.popleft() # get the first pushed state
@@ -39,9 +39,11 @@ def BreadthFirstSearch(problem: Problem[S, A], initial_state: S) -> Solution:
             next_state = problem.get_successor(state,action) # get the next state
             if(problem.is_goal(next_state)): # if it is the goal return the solution
                 parent_map[next_state] = state 
-                return get_solution(parent_map,next_state) 
+                action_map[next_state] = action
+                return get_solution(parent_map, action_map, next_state) 
             if next_state not in frontier and next_state not in explored: # if it isn't in frontier or explored add it to frontier
                 parent_map[next_state] = state 
+                action_map[next_state] = action
                 frontier.append(next_state) 
 
     return None
@@ -52,18 +54,20 @@ def DepthFirstSearch(problem: Problem[S, A], initial_state: S) -> Solution:
     stack = [] # use stack for DFS
     explored = set() # use explore to use graph search
     parent_map = {initial_state:None} # used to store the parents
+    action_map = {initial_state: None}  # used to store actions
     stack.append(initial_state) 
     while stack: # as the stack isn't empty
         state = stack.pop() # get the last pushed state
         explored.add(state) # add it to explored
-        
+
+        if(problem.is_goal(state)):    # if it is the goal return the solution
+            return get_solution(parent_map, action_map, state)
+
         for action in problem.get_actions(state): # for each action applicable to the state
             next_state = problem.get_successor(state,action) # get the next state
-            if(problem.is_goal(next_state)):    # if it is the goal return the solution
-                parent_map[next_state] = state 
-                return get_solution(parent_map,next_state)
             if next_state not in stack and next_state not in explored: # if it isn't in stack or explored add it to stack
                 parent_map[next_state] = state 
+                action_map[next_state] = action
                 stack.append(next_state) 
 
     return None
@@ -77,6 +81,7 @@ def UniformCostSearch(problem: Problem[S, A], initial_state: S) -> Solution:
     heappush(frontier, (0, next(counter), initial_state))  # push the initial state with cost 0
     explored = set() # use explore to use graph search
     parent_map = {initial_state: None} # used to store the parents
+    action_map = {initial_state: None}  # used to store actions
 
     while frontier: 
         cost, _, state = heappop(frontier)   # lowest-cost node
@@ -85,7 +90,7 @@ def UniformCostSearch(problem: Problem[S, A], initial_state: S) -> Solution:
         explored.add(state) # add to explored
 
         if problem.is_goal(state): # if it is the goal
-            return get_solution(parent_map, state)
+            return get_solution(parent_map, action_map, state)
 
         for action in problem.get_actions(state): # for each action applicable to the state
             next_state = problem.get_successor(state, action) # get the next state
@@ -94,6 +99,7 @@ def UniformCostSearch(problem: Problem[S, A], initial_state: S) -> Solution:
                 current_costs[next_state] = new_cost # update the cost
                 heappush(frontier, (new_cost, next(counter), next_state)) # push to frontier
                 parent_map[next_state] = state # set the parent
+                action_map[next_state] = action
     return None
 
     # NotImplemented()
@@ -108,6 +114,7 @@ def AStarSearch(problem: Problem[S, A], initial_state: S, heuristic: HeuristicFu
     heappush(frontier, (hn, next(counter), initial_state)) 
     explored = set() # use explore to use graph search
     parent_map = {initial_state: None}
+    action_map = {initial_state: None}  # used to store actions
 
     while frontier:
         cost, _, state = heappop(frontier)   # lowest-cost node
@@ -116,7 +123,7 @@ def AStarSearch(problem: Problem[S, A], initial_state: S, heuristic: HeuristicFu
         explored.add(state)
 
         if problem.is_goal(state):
-            return get_solution(parent_map, state)
+            return get_solution(parent_map, action_map, state)
 
         for action in problem.get_actions(state): # for each action applicable to the state
             next_state = problem.get_successor(state, action) # get the next state
@@ -128,6 +135,7 @@ def AStarSearch(problem: Problem[S, A], initial_state: S, heuristic: HeuristicFu
                 current_costs[next_state] = new_cost # update g(n)
                 heappush(frontier, (new_fn, next(counter), next_state)) # push to frontier
                 parent_map[next_state] = state # set the parent
+                action_map[next_state] = action
     return None
 
     # NotImplemented()
@@ -136,23 +144,26 @@ def BestFirstSearch(problem: Problem[S, A], initial_state: S, heuristic: Heurist
     frontier = [] # use priority queue for Best-First Search
     h0 = heuristic(problem,initial_state) # calculate h for the initial state
     heuristics = {initial_state:h0} # store the h0 for the inital state
+    frontier_states = {initial_state} # track states currently in the frontier
     counter = itertools.count()  # if tie happen use this to break it
     heappush(frontier, (h0, next(counter), initial_state)) 
     explored = set() # use explore to use graph search
     parent_map = {initial_state: None}
+    action_map = {initial_state: None}  # used to store actions
 
     while frontier:
         h_val, _, state = heappop(frontier)   # lowest-cost node
         if state in explored:
             continue
         explored.add(state)
+        frontier_states.discard(state)
 
         if problem.is_goal(state):
-            return get_solution(parent_map, state)
+            return get_solution(parent_map, action_map, state)
 
         for action in problem.get_actions(state): # for each action applicable to the state
             next_state = problem.get_successor(state, action) # get the next state
-            if next_state in explored: 
+            if next_state in explored or next_state in frontier_states: 
                 continue
             if next_state in heuristics: # if already calculated h(n)
                 new_heuristic = heuristics[next_state] 
@@ -160,5 +171,7 @@ def BestFirstSearch(problem: Problem[S, A], initial_state: S, heuristic: Heurist
                 new_heuristic = heuristic(problem,next_state) # calculate h(n)
                 heuristics[next_state] = new_heuristic # store h(n)
             heappush(frontier, (new_heuristic, next(counter), next_state)) # push to frontier
+            frontier_states.add(next_state)
             parent_map[next_state] = state # set the parent
+            action_map[next_state] = action
     return None
