@@ -108,16 +108,17 @@ def AStarSearch(problem: Problem[S, A], initial_state: S, heuristic: HeuristicFu
     #TODO: ADD YOUR CODE HERE
     frontier = [] # use priority queue for A*
     hn = heuristic(problem,initial_state) # calculate h for the initial state
-    fns = {initial_state:hn} # store the f(n) costs for each state
-    current_costs = {initial_state: 0} # store the costs for each state
+    fn0 = hn  # f(n) = g(n) + h(n) for initial state
+    fns = {initial_state: fn0} # store the f(n) costs for each state
+    current_costs = {initial_state: 0} # store the g(n) costs for each state
     counter = itertools.count() # if tie happen use this to break it
-    heappush(frontier, (hn, next(counter), initial_state)) 
+    heappush(frontier, (fn0, next(counter), initial_state)) 
     explored = set() # use explore to use graph search
     parent_map = {initial_state: None}
     action_map = {initial_state: None}  # used to store actions
 
     while frontier:
-        cost, _, state = heappop(frontier)   # lowest-cost node
+        cost, _, state = heappop(frontier)   # lowest f(n) node
         if state in explored:
             continue
         explored.add(state)
@@ -127,6 +128,8 @@ def AStarSearch(problem: Problem[S, A], initial_state: S, heuristic: HeuristicFu
 
         for action in problem.get_actions(state): # for each action applicable to the state
             next_state = problem.get_successor(state, action) # get the next state
+            if next_state in explored:
+                continue
             new_cost = current_costs[state] + problem.get_cost(state, action) # calculate g(n)
             hn = heuristic(problem,next_state) # calculate h(n)
             new_fn = new_cost + hn # calculate f(n)
