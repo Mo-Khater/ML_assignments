@@ -1,4 +1,4 @@
-from sokoban import SokobanProblem, SokobanState
+from sokoban import SokobanProblem, SokobanState, SokobanLayout
 from mathutils import Direction, Point, manhattan_distance
 from helpers.utils import NotImplemented
 from collections import deque
@@ -10,196 +10,126 @@ def weak_heuristic(problem: SokobanProblem, state: SokobanState):
 
 #TODO: Import any modules and write any functions you want to use
 
+_deadlock_cache = {}
 
-def build_goal_distance_database(problem: SokobanProblem):
-    """Pre-compute distances from every position to each goal separately"""
-    cache = problem.cache()
-    
-    if 'goal_distances' in cache:
-        return cache['goal_distances']
-    
-    goal_distances = {}
-    
-    # For each goal, compute distance to all reachable positions
-    for goal in problem.layout.goals:
-        distances = {goal: 0}
-        queue = deque([goal])
-        
-        while queue:
-            pos = queue.popleft()
-            current_dist = distances[pos]
+def get_deadlock_positions(layout: SokobanLayout) -> frozenset[Point]:
+    """
+    Identifies and caches deadlock positions for a given Sokoban layout.
+    A deadlock position is a non-goal square from which a crate cannot be moved to any goal.
+    This implementation detects simple "corner" and "edge" deadlocks.
+    """
+    if layout in _deadlock_cache:
+        return _deadlock_cache[layout]
+
+    deadlocks = set()
+    for y in range(layout.height):
+        for x in range(layout.width):
+            p = Point(x, y)
+            if p in layout.goals or p not in layout.walkable:
+                continue
+
+            # Check for corner deadlocks
+            is_deadlock = False
+            # Up-Left
+            if (p + Direction.UP.to_vector() not in layout.walkable and
+                p + Direction.LEFT.to_vector() not in layout.walkable):
+                is_deadlock = True
+            # Up-Right
+            if (p + Direction.UP.to_vector() not in layout.walkable and
+                p + Direction.RIGHT.to_vector() not in layout.walkable):
+                is_deadlock = True
+            # Down-Left
+            if (p + Direction.DOWN.to_vector() not in layout.walkable and
+                p + Direction.LEFT.to_vector() not in layout.walkable):
+                is_deadlock = True
+            # Down-Right
+            if (p + Direction.DOWN.to_vector() not in layout.walkable and
+                p + Direction.RIGHT.to_vector() not in layout.walkable):
+                is_deadlock = True
             
-            # Check all 4 directions
-            for direction in [Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT]:
-                next_pos = pos + direction.to_vector()
-                
-                if next_pos in problem.layout.walkable and next_pos not in distances:
-                    distances[next_pos] = current_dist + 1
-                    queue.append(next_pos)
-        
-        goal_distances[goal] = distances
-    
-    cache['goal_distances'] = goal_distances
-    return goal_distances
+            if is_deadlock:
+                deadlocks.add(p)
 
-def detect_corner_deadlock(problem: SokobanProblem, crate: Point) -> bool:
-    """Check if crate is stuck in a corner (simple deadlock detection)"""
-    if crate in problem.layout.goals:
-        return False
-    
-    layout = problem.layout
-    up = crate + Direction.UP.to_vector()
-    down = crate + Direction.DOWN.to_vector()
-    left = crate + Direction.LEFT.to_vector()
-    right = crate + Direction.RIGHT.to_vector()
-    
-    # Check if crate is blocked vertically and horizontally
-    vertical_blocked = (up not in layout.walkable or down not in layout.walkable)
-    horizontal_blocked = (left not in layout.walkable or right not in layout.walkable)
-    
-    return vertical_blocked and horizontal_blocked
+    # Check for edge deadlocks
+    for p in list(deadlocks): # Iterate over a copy
+        # If a crate is on an edge and can't slide off, it's a deadlock
+        # Check horizontal edge
+        if (p + Direction.UP.to_vector() not in layout.walkable or 
+            p + Direction.DOWN.to_vector() not in layout.walkable):
+            # on a horizontal edge, check if it can slide out
+            can_slide = False
+            # check left
+            temp_p = p
+            while temp_p in layout.walkable and (temp_p + Direction.UP.to_vector() not in layout.walkable or temp_p + Direction.DOWN.to_vector() not in layout.walkable):
+                if temp_p in layout.goals:
+                    can_slide = True
+                    break
+                temp_p += Direction.LEFT.to_vector()
+            # check right
+            if not can_slide:
+                temp_p = p
+                while temp_p in layout.walkable and (temp_p + Direction.UP.to_vector() not in layout.walkable or temp_p + Direction.DOWN.to_vector() not in layout.walkable):
+                    if temp_p in layout.goals:
+                        can_slide = True
+                        break
+                    temp_p += Direction.RIGHT.to_vector()
+            if not can_slide:
+                deadlocks.add(p)
 
-def detect_wall_deadlock(problem: SokobanProblem, crate: Point) -> bool:
-    """Check if crate is stuck along a wall with no goals - simplified fast version"""
-    if crate in problem.layout.goals:
-        return False
-    
-    layout = problem.layout
-    goals_set = problem.layout.goals
-    
-    # Simple check: if surrounded by walls with no adjacent goal
-    up = crate + Direction.UP.to_vector()
-    down = crate + Direction.DOWN.to_vector()
-    left = crate + Direction.LEFT.to_vector()
-    right = crate + Direction.RIGHT.to_vector()
-    
-    adjacent_goals = sum(1 for pos in [up, down, left, right] if pos in goals_set)
-    
-    # If no adjacent goals and we're boxed in, it's a deadlock
-    if adjacent_goals == 0:
-        walls = sum(1 for pos in [up, down, left, right] if pos not in layout.walkable)
-        # If 2+ walls and only 2 or fewer walkable spaces, likely deadlock
-        if walls >= 2:
-            return True
-    
-    return False
+        # Check vertical edge
+        if (p + Direction.LEFT.to_vector() not in layout.walkable or 
+            p + Direction.RIGHT.to_vector() not in layout.walkable):
+            # on a vertical edge, check if it can slide out
+            can_slide = False
+            # check up
+            temp_p = p
+            while temp_p in layout.walkable and (temp_p + Direction.LEFT.to_vector() not in layout.walkable or temp_p + Direction.RIGHT.to_vector() not in layout.walkable):
+                if temp_p in layout.goals:
+                    can_slide = True
+                    break
+                temp_p += Direction.UP.to_vector()
+            # check down
+            if not can_slide:
+                temp_p = p
+                while temp_p in layout.walkable and (temp_p + Direction.LEFT.to_vector() not in layout.walkable or temp_p + Direction.RIGHT.to_vector() not in layout.walkable):
+                    if temp_p in layout.goals:
+                        can_slide = True
+                        break
+                    temp_p += Direction.DOWN.to_vector()
+            if not can_slide:
+                deadlocks.add(p)
 
-def detect_line_deadlock(problem: SokobanProblem, crate: Point) -> bool:
-    """Check if crate is stuck in a line with no goals nearby"""
-    if crate in problem.layout.goals:
-        return False
-    
-    layout = problem.layout
-    goals_set = problem.layout.goals
-    
-    # Check if stuck horizontally (wall on both left and right, no goal)
-    left = crate + Direction.LEFT.to_vector()
-    right = crate + Direction.RIGHT.to_vector()
-    
-    if left not in layout.walkable and right not in layout.walkable:
-        # Stuck horizontally, check if any goal nearby
-        up = crate + Direction.UP.to_vector()
-        down = crate + Direction.DOWN.to_vector()
-        if up not in goals_set and down not in goals_set:
-            return True
-    
-    # Check if stuck vertically (wall on both up and down, no goal)
-    up = crate + Direction.UP.to_vector()
-    down = crate + Direction.DOWN.to_vector()
-    
-    if up not in layout.walkable and down not in layout.walkable:
-        # Stuck vertically, check if any goal nearby
-        left = crate + Direction.LEFT.to_vector()
-        right = crate + Direction.RIGHT.to_vector()
-        if left not in goals_set and right not in goals_set:
-            return True
-    
-    return False
 
-def detect_frozen_deadlock(problem: SokobanProblem, state: SokobanState, crate: Point) -> bool:
-    """Check if crate can't be pushed to any goal (surrounded by other crates or walls)"""
-    if crate in problem.layout.goals:
-        return False
-    
-    layout = problem.layout
-    
-    # Check all 4 directions - if surrounded by walls or other crates, it's frozen
-    directions = [Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT]
-    blocked = 0
-    
-    for direction in directions:
-        next_pos = crate + direction.to_vector()
-        if next_pos not in layout.walkable or next_pos in state.crates:
-            blocked += 1
-    
-    # If 3 or more directions blocked, crate is frozen
-    return blocked >= 3
+    _deadlock_cache[layout] = frozenset(deadlocks)
+    return _deadlock_cache[layout]
+
 
 def strong_heuristic(problem: SokobanProblem, state: SokobanState) -> float:
-    if not state.crates:
-        return 0
+    """
+    Implements a strong heuristic for Sokoban using a combination of deadlock
+    detection and the "Simple Lower Bound" method.
+
+    1. Deadlock Pruning: It first checks if any crate is in a pre-calculated
+       deadlock position. If so, it returns infinity to prune this state.
+
+    2. Simple Lower Bound: If no deadlocks are found, it calculates the sum
+       of the Manhattan distances for each crate to its nearest goal. This
+       heuristic is admissible and consistent.
+
+    Reference: http://sokobano.de/wiki/index.php?title=Solver
+    """
     
-    cache = problem.cache()
-    
-    # Cache goals set, list, database, deadlock positions, and state heuristic results
-    if 'goals_set' not in cache:
-        cache['goals_set'] = problem.layout.goals
-        cache['goals_list'] = list(problem.layout.goals)
-        cache['goal_distances'] = build_goal_distance_database(problem)
-        cache['position_deadlock'] = {}  # Cache deadlock status for each position
-        cache['state_heuristics'] = {}
-    
-    goals_set = cache['goals_set']
-    goals_list = cache['goals_list']
-    goal_distances = cache['goal_distances']
-    position_deadlock = cache['position_deadlock']
-    state_heuristics = cache['state_heuristics']
-    
-    # Quick check: if all crates are on goals
-    if state.crates.issubset(goals_set):
-        return 0
-    
-    # Use state as key for caching (frozenset is hashable)
-    state_key = state.crates
-    
-    # Check if we've already calculated heuristic for this state
-    if state_key in state_heuristics:
-        return state_heuristics[state_key]
-    
-    # Sum of minimum distances for unplaced crates
-    total = 0
+    # Pruning via Deadlock Detection
+    deadlock_positions = get_deadlock_positions(problem.layout)
     for crate in state.crates:
-        if crate in goals_set:
-            continue
-        
-        # Check cached deadlock status for this position
-        if crate not in position_deadlock:
-            # Calculate and cache deadlock status
-            if (detect_corner_deadlock(problem, crate) or
-                detect_wall_deadlock(problem, crate) or
-                detect_line_deadlock(problem, crate)):
-                position_deadlock[crate] = True
-            else:
-                position_deadlock[crate] = False
-        
-        # Check static deadlock (doesn't depend on state)
-        if position_deadlock[crate]:
-            state_heuristics[state_key] = float('inf')
+        if crate in deadlock_positions:
             return float('inf')
-        
-        # Check frozen deadlock (depends on current state)
-        if detect_frozen_deadlock(problem, state, crate):
-            state_heuristics[state_key] = float('inf')
-            return float('inf')
-        
-        # Lookup pre-computed distance
-        dist = goal_distances.get(crate)
-        if dist is not None:
-            total += dist
-        else:
-            # Fallback to Manhattan
-            total += min(manhattan_distance(crate, goal) for goal in goals_list)
+
+    # Simple Lower Bound
+    total_distance = 0
+    for crate in state.crates:
+        min_dist_to_goal = min(manhattan_distance(crate, goal) for goal in problem.layout.goals)
+        total_distance += min_dist_to_goal
     
-    # Cache the result
-    state_heuristics[state_key] = total
-    return total
+    return float(total_distance)
+  
