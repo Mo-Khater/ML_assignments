@@ -43,7 +43,35 @@ def minimum_remaining_values(problem: Problem, domains: Dict[str, set]) -> str:
 #            since they contain the current domains of unassigned variables only.
 def forward_checking(problem: Problem, assigned_variable: str, assigned_value: Any, domains: Dict[str, set]) -> bool:
     #TODO: Write this function
-    NotImplemented()
+    
+    for constraint in problem.constraints:
+        if not isinstance(constraint, BinaryConstraint):
+            continue
+        
+        # Determine which variable is the assigned one and which is the other
+        if constraint.variables[0] == assigned_variable:
+            other = constraint.variables[1]
+        elif constraint.variables[1] == assigned_variable:
+            other = constraint.variables[0]
+        else:
+            continue
+
+        if other not in domains:
+            continue
+
+        new_domain = set()
+        for other_value in domains[other]:
+            if constraint.variables[0] == assigned_variable:
+                if constraint.condition(assigned_value, other_value):
+                    new_domain.add(other_value)
+            else:  # constraint.variables[1] == assigned_variable
+                if constraint.condition(other_value, assigned_value):
+                    new_domain.add(other_value)
+        
+        if not new_domain:
+            return False
+        domains[other] = new_domain
+    return True
 
 # This function should return the domain of the given variable order based on the "least restraining value" heuristic.
 # IMPORTANT: This function should not modify any of the given arguments.
@@ -51,13 +79,45 @@ def forward_checking(problem: Problem, assigned_variable: str, assigned_value: A
 #   - You are not given a value for the given variable, since you should do the process for every value in the variable's
 #     domain to see how much it will restrain the neigbors domain
 #   - Here, you do not modify the given domains. But you can create and modify a copy.
-# IMPORTANT: If multiple values have the same priority given the "least restraining value" heuristic, 
+# IMPORTANT: If multiple values have the same priority given to the "least restraining value" heuristic, 
 #            order them in ascending order (from the lowest to the highest value).
 # IMPORTANT: Don't use the domains inside the problem, use and modify the ones given by the "domains" argument 
 #            since they contain the current domains of unassigned variables only.
 def least_restraining_values(problem: Problem, variable_to_assign: str, domains: Dict[str, set]) -> List[Any]:
     #TODO: Write this function
-    NotImplemented()
+    variables_restrain = []
+    for value in domains[variable_to_assign]:
+        violations = 0
+        for constraint in problem.constraints:
+            if not isinstance(constraint, BinaryConstraint):
+                continue
+
+            if constraint.variables[0] == variable_to_assign:
+                other = constraint.variables[1]
+            elif constraint.variables[1] == variable_to_assign:
+                other = constraint.variables[0]
+            else:
+                continue
+
+            if other not in domains:
+                continue
+
+            for other_value in domains[other]:
+                if constraint.variables[0] == variable_to_assign:
+                    if not constraint.condition(value, other_value):
+                        violations += 1
+                else: 
+                    if not constraint.condition(other_value, value):
+                        violations += 1
+
+        variables_restrain.append((violations, value))
+
+    variables_restrain.sort()
+    return [value for _, value in variables_restrain]
+
+        
+                    
+
 
 # This function should solve CSP problems using backtracking search with forward checking.
 # The variable ordering should be decided by the MRV heuristic.
@@ -69,5 +129,48 @@ def least_restraining_values(problem: Problem, variable_to_assign: str, domains:
 #            for every assignment including the initial empty assignment, EXCEPT for the assignments pruned by the forward checking.
 #            Also, if 1-Consistency deems the whole problem unsolvable, you shouldn't call "problem.is_complete" at all.
 def solve(problem: Problem) -> Optional[Assignment]:
-    #TODO: Write this function
-    NotImplemented()
+    # Apply 1-Consistency first to handle unary constraints
+    if not one_consistency(problem):
+        return None
+    
+    # Initialize the assignment and domains for unassigned variables
+    assignment = {}
+    domains = {var: problem.domains[var].copy() for var in problem.variables}
+    
+    # Recursive backtracking function
+    def backtrack(assignment: Assignment, domains: Dict[str, set]) -> Optional[Assignment]:
+        # Check if assignment is complete
+        if problem.is_complete(assignment):
+            return assignment
+        
+        # Select unassigned variable using MRV heuristic
+        variable = minimum_remaining_values(problem, domains)
+        
+        # Try values in order determined by least restraining values heuristic
+        ordered_values = least_restraining_values(problem, variable, domains)
+        
+        for value in ordered_values:
+            # Make a copy of domains for backtracking
+            domains_copy = {var: domain.copy() for var, domain in domains.items()}
+            
+            # Remove the variable from domains (it's now assigned)
+            del domains_copy[variable]
+            
+            # Apply forward checking
+            if forward_checking(problem, variable, value, domains_copy):
+                # Add assignment
+                assignment[variable] = value
+                
+                # Recursively try to complete the assignment
+                result = backtrack(assignment, domains_copy)
+                if result is not None:
+                    return result
+                
+                # Backtrack: remove assignment
+                del assignment[variable]
+        
+        # No valid assignment found
+        return None
+    
+    # Start backtracking with empty assignment
+    return backtrack(assignment, domains)

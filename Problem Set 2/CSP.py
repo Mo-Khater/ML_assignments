@@ -64,7 +64,7 @@ class Problem:
                                     # The domain is a set of values that the variable can take. 
     constraints: List[Constraint]   # A list of constraints in the problem.
 
-    # Returns True if the assignment is complete (all the variables has an value in the given assignment).
+    # Returns True if the assignment is complete (all the variables has a value in the given assignment).
     @track_call_count
     def is_complete(self, assignment: Assignment) -> bool:
         return all(var in assignment for var in self.variables)
